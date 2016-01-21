@@ -100,3 +100,119 @@ In order to avoid compatibility problems, make sure your IEquatable&lt;T&gt;.Equ
 
 See "Notes to implementers" section here: https://msdn.microsoft.com/en-us/library/ms131190(v=vs.110).aspx
 
+Arrays
+--------
+* Multi-dimensional arrays will not be supported for V1 beyond four dimensions.
+* Arrays with non-zero lower bounds are not supported (Array.CreateInstance(type, int,int)). 
+* Arrays of unmanaged pointers are not supported (though arrays of IntPtr will work just fine).
+* Array.Copy does not do type conversions (copying byte[] into an int[] will throw an exception))
+
+Generics
+--------
+Reflection will no longer unify generic types closed over its own formal parameters with the generic type definition.
+
+{@TODO: You can't use reflection to get or set a pointer field. ?}
+
+Types can be loaded even if there is a cycle in generic initialization 
+--------
+This will work now.
+```csharp
+struct N<T> {} 
+struct X { N<X> x;}
+```
+It didn't use to work on desktop and threw a TypeLoadException.
+
+Constraint violations don't yield errors in the compiler
+--------
+Bad IL fails to compile on Desktop but might successfuly compile on .NET Native. The compiler assumes the IL was produced by a ECMA-335 compliant compiler.
+
+System.Type does not inherit from MemberInfo anymore 
+-------
+Some existing libraries that were not compiled agains the .NET Core profile might attempt to cast System.Type to MemberInfo, or attempt to access MemberInfo members.
+
+Value types cannot declare a default constructor 
+--------
+It's not possible to create such types in C# or VB, but the IL format supports this. The .NET Native compiler will fail to compile such types. 
+
+BigInteger
+---------
+* BigInteger doesn't implement CompareTo(System.Object) implicitly.
+*	BigInteger.ToString ("E") is correctly rounded in .NET Native. In some versions of the CLR, the result string is truncated instead of rounded.
+
+No support for C++-style varargs
+-----------
+The undocumented keyword __arglist is not supported in C#.
+
+You can't reflection-invoke P/invoke methods
+----------
+To work around the problem, you can introduce a managed method to wrap the call to the P/invoke and reflection-invoke the wrapper.
+
+Enumerate and load files in app no longer works
+----------
+Apps that rely on seeing the managed *.dll files in the application package will not see them. After native compilation, the managed assemblies are compiled into native code.
+
+{@TODO reflection - RD.XML and stuff}
+
+Inconsistencies for GetRuntime*() methods
+--------
+{@TODO make a bulleted list of the APIs}
+On the desktop CLR, GetRuntimeProperties() and GetRuntimeEvents() behave inconsistently from the other GetRuntime*() apis. Unlike the other GetRuntime*() apis, they suppress hidden instance properties and events defined inside base classes.
+
+On .NET Native, the GetRuntime*() apis all behave consistently. That is, the results include hidden instance members from base classes.
+
+RuntimeReflectionExtensions.GetRuntimeInterfaceMap is not supported
+-------------
+This is not currently supported.
+
+RuntimeReflectionsExtensions.GetRuntimeMethods() doesn't include hidden members in base classes
+------------
+On the desktop, RuntimeReflectionsExtensions.GetRuntimeMethods()'s output include hidden members in base classes, but GetRuntimeProperties() and GetRuntimeEvents() does not.
+
+NullableComparer not supported
+-------------
+System.Collections.Generics.Comparer.Default&lt;Nullable&lt;T&gt;&gt; will produce a usable comparer only if T implements the non-generic IComparable interface.
+
+System.Reflection.Context not suppported
+------------
+This is not currently supported.
+
+ArgumentException instead of TargetParameterCountException
+------------
+Delegate.DynamicInvoke throws ArgumentException rather than TargetParameterCountException if both the argument count and parmeter types are wrong.
+
+This also affects MethodBase.Invoke, PropertyInfo.Get/Set and any other apis that are based on dynamic invocation.
+
+{@TODO Serialization}
+
+XmlDocument line endings now conform with standard
+------------
+XmlDocument replaces `\r\n` -> `\n` and `\r` -> `\n` where it doesn’t do that on Desktop (even when you tell it to preserve whitespaces). The new behavior conforms the XML standard.
+
+Aggressive late global optimizations may remove code with side effects
+-------------
+For example:
+* An access that would cause a null reference exception may be optimized away if the accessed object is not used afterwards.
+* Unused casts won't throw InvalidCastException
+
+Debugging in Release mode results in a non-optimal developer experience
+-------------
+To debug .NET Native specific issues, enable .NET Native compiler in the Debug build of your app. {@TODO add link with pictures and instructions}
+
+Infinite loops on any thread may lead to GC starvation
+-------------
+Imagine simple case of having only two threads and one is in infinite thread, other is waiting for GC collection, GC can’t start waiting for loop thread to stop, which will cause the starvation.
+
+Tail calls are currently not supported
+-------------
+The tail. prefix is just a hint and it won't be respected by the .NET Native compiler.
+
+Types that have duplicate members are not supported 
+------------
+Duplicate members are not allowed as per the ECMA 335 specification. .NET Native is more strict about correctness of the inputs.
+
+Any type with 256 or more generic type arguments will be rejected
+-------------
+This may also affect deeply nested generic types where the C# compiler introduces new generic type parameters behind the scenes.
+
+{@TODO Interop}
+
